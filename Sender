@@ -1,0 +1,114 @@
+import javax.sound.sampled.LineUnavailableException;
+import java.io.*;
+import java.net.*;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+
+public class Sender{
+
+    static DatagramSocket sending_socket;
+    static DatagramSocket receiving_socket;
+
+    public static void main (String[] args){
+
+        Random generator = new Random();
+
+        // hardcode values known to both sides for Diffie Hellman
+        int p = 367027;
+        int g = 5;
+
+        // random generate number x known only to sender
+        int x = generator.nextInt(5) + 5;
+        System.out.println("Random prime: " + p);
+        System.out.println("Public number: " + g);
+        System.out.println("Private x: " + x);
+
+        // sender side calculation
+        int R1 = (int)Math.pow(g,x)%p;
+        System.out.println("Sender R1: " + R1);
+
+        //***************************************************
+        //Port to send to
+        int PORT = 55555;
+        int PORT2 = 55556;
+        //IP ADDRESS to send to
+        InetAddress clientIP = null;
+
+        boolean running = false;
+
+        try {
+            clientIP = InetAddress.getByName("localhost");
+        } catch (UnknownHostException e) {
+            System.out.println("ERROR: Sender: Could not find client IP");
+            e.printStackTrace();
+            System.exit(0);
+        }
+
+        try{
+            sending_socket = new DatagramSocket();
+            receiving_socket = new DatagramSocket(PORT);
+        } catch (SocketException e){
+            System.out.println("ERROR: Sender: Could not open UDP socket to send from.");
+            e.printStackTrace();
+            System.exit(0);
+        }
+        //***************************************************
+
+        //***************************************************
+        //Get a handle to the Standard Input (console) so we can read user input
+
+        BufferedReader in = new BufferedReader(new InputStreamReader(System.in));
+
+        try {
+            String start = in.readLine();
+            byte[] startBuffer = start.getBytes();
+            ByteBuffer toSend = ByteBuffer.allocate(start.length() + R1);
+            toSend.putInt(R1);
+            toSend.put(startBuffer);
+            DatagramPacket startPacket = new DatagramPacket(toSend.array(), toSend.array().length, clientIP, PORT2);
+            sending_socket.send(startPacket);
+
+            byte[] buffer = new byte[512];
+            DatagramPacket receivedPacket = new DatagramPacket(buffer, 0, 512);
+            receiving_socket.setSoTimeout(10000);
+            receiving_socket.receive(receivedPacket);
+            String startString = new String(buffer);
+            System.out.println(startString);
+
+            ByteBuffer received = ByteBuffer.wrap(buffer);
+            int R2 = received.getInt();
+            int length = String.valueOf(R2).length();
+            String receivedString = new String(Arrays.copyOfRange(received.array(), length, received.array().length));
+
+            // K should be same for both sender and receiver (K can be encryption key)
+            int K = (int)Math.pow(R2,x)%p;
+            System.out.println("Sender K: " + K);
+
+            if (startString.contains("ACKNOWLEDGED")){
+                String ackString = "ACKNOWLEDGEMENT ACKNOWLEDGED";
+                byte[] ackBuffer = ackString.getBytes();
+                DatagramPacket ackPacket = new DatagramPacket(ackBuffer, ackBuffer.length, clientIP, PORT2);
+                sending_socket.send(ackPacket);
+                // running = true;
+            }
+        } catch (SocketTimeoutException e) {
+            System.out.println("Socket timeout");
+
+        } catch (IOException e){
+            System.out.println("ERROR1: Sender: Some random IO error occurred!");
+        }
+
+
+
+
+        while (running){
+            System.out.println("SENDER RUNNING FUCK YOU");
+        }
+        //Close the socket
+        sending_socket.close();
+        //***************************************************
+    }
+}
