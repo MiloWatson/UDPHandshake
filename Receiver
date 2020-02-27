@@ -1,0 +1,109 @@
+import CMPC3M06.AudioRecorder;
+import javax.sound.sampled.LineUnavailableException;
+import java.io.*;
+import java.net.*;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+
+public class Receiver {
+
+    private static int count = 0;
+
+    static DatagramSocket sending_socket;
+    static DatagramSocket receiving_socket;
+
+    public static void main(String[] args) {
+
+        Random generator = new Random();
+
+        int p = 367027;
+        int g = 5;
+        int y = generator.nextInt(5) + 5;
+        System.out.println("Random prime: " + p);
+        System.out.println("Public number: " + g);
+        System.out.println("Private y: " + y);
+
+        int R2 = (int)Math.pow(g,y)%p;
+        System.out.println("Receiver R2: " + R2);
+
+        //***************************************************
+        //Port to open socket on
+        int PORT = 55555;
+        int PORT2 = 55556;
+        InetAddress clientIP = null;
+        boolean running = false;
+
+        try {
+            clientIP = InetAddress.getByName("localhost");
+        } catch (UnknownHostException e) {
+            System.out.println("ERROR: Sender: Could not find client IP");
+            e.printStackTrace();
+            System.exit(0);
+        }
+        try {
+            receiving_socket = new DatagramSocket(PORT2);
+            sending_socket = new DatagramSocket();
+        } catch (SocketException e) {
+            System.out.println("ERROR: Receiver: Could not open UDP socket to receive from.");
+            e.printStackTrace();
+            System.exit(0);
+        }
+        //***************************************************
+
+        //***************************************************
+        //Main loop.
+
+        try {
+            byte[] buffer = new byte[512];
+            DatagramPacket receivedPacket = new DatagramPacket(buffer, 0, 512);
+            receiving_socket.setSoTimeout(10000);
+            receiving_socket.receive(receivedPacket);
+            String startString = new String(buffer);
+
+            ByteBuffer received = ByteBuffer.wrap(buffer);
+            int R1 = received.getInt();
+            int length = String.valueOf(R1).length();
+            String receivedString = new String(Arrays.copyOfRange(received.array(), length, received.array().length));
+
+            int K = (int)Math.pow(R1,y)%p;
+            System.out.println("Receiver K: " + K);
+
+            if (startString.contains("START")) {
+                String ackString = "ACKNOWLEDGED";
+                byte[] ackBuffer = ackString.getBytes();
+                ByteBuffer toSend = ByteBuffer.allocate(ackString.length() + R2);
+                toSend.putInt(R2);
+                toSend.put(ackBuffer);
+                DatagramPacket ackPacket = new DatagramPacket(toSend.array(), toSend.array().length, clientIP, PORT);
+                sending_socket.send(ackPacket);
+            }
+
+            byte[] ack2Buffer = new byte[80];
+            DatagramPacket received2Packet = new DatagramPacket(ack2Buffer, 0, 80);
+            receiving_socket.receive(received2Packet);
+            String ack2String = new String(ack2Buffer);
+            System.out.println(ack2String);
+            if (ack2String.contains("ACKNOWLEDGEMENT ACKNOWLEDGED")) {
+                // running = true;
+            }
+
+        } catch (SocketTimeoutException e) {
+            System.out.println("Socket timeout");
+
+        } catch (IOException e) {
+            System.out.println("ERROR1: Sender: Some random IO error occured!");
+            e.printStackTrace();
+        }
+
+        while (running) {
+            System.out.println("RECEIVER RUNNING FUCK YEAH");
+        }
+        //Close the socket
+        receiving_socket.close();
+        //***************************************************
+    }
+
+}
